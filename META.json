@@ -59,7 +59,7 @@
    "provides" : {
       "PLON" : {
          "file" : "lib/PLON.pm",
-         "version" : "0.05"
+         "version" : "0.06"
       }
    },
    "release_status" : "stable",
@@ -73,5 +73,5 @@
          "web" : "https://github.com/tokuhirom/PLON"
       }
    },
-   "version" : "0.05"
+   "version" : "0.06"
 }

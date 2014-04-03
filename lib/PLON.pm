@@ -7,7 +7,7 @@ use parent qw(Exporter);
 use B;
 use Encode ();
 
-our $VERSION = "0.05";
+our $VERSION = "0.06";
 
 our @EXPORT = qw(encode_pson decode_pson);
 
@@ -206,7 +206,7 @@ sub _decode {
     } elsif (/\G${WS}undef/gc) {
         return undef;
     } elsif (/\G${WS}sub\s*\{/gc) {
-        Carp::confess("Cannot decode PLON contains CodeRef.");
+        return $self->_decode_code();
     } else {
         die "Unexpected token: " . substr($_, 0, 2);
     }
@@ -250,9 +250,17 @@ sub _decode_term {
         0+$1;
     } elsif (/\G${WS}undef/gc) {
         return undef;
+    } elsif (/\G${WS}sub\s*\{/gc) {
+        return $self->_decode_code();
     } else {
         _exception("Not a term");
     }
+}
+
+sub _decode_code {
+    # We can't decode coderef. Because it makes security issue.
+    # And, we can't detect end of code block.
+    Carp::confess("Cannot decode PLON contains CodeRef.");
 }
 
 sub _decode_string {
@@ -385,6 +393,13 @@ required by the PLON syntax or other flags. This results in a faster and more co
     PLON->new->ascii(1)->encode([chr 0x10401])
     => ["\x{10401}"]
 
+=item C<< $pson->deparse([$enabled]) >>
+
+=item C<< my $enabled = $pson->get_deparse() >>
+
+If $enable is true (or missing), then the encode method will de-parse the code by L<B::Deparse>.
+Otherwise, encoder generates C<sub { "DUMMY" }> like L<Data::Dumper>.
+
 =back
 
 =head1 PLON Spec
@@ -407,6 +422,18 @@ it under the same terms as Perl itself.
 =head1 AUTHOR
 
 Tokuhiro Matsuno E<lt>tokuhirom@gmail.comE<gt>
+
+=head1 SEE ALSO
+
+=over 4
+
+=item L<Data::Dumper>
+
+=item L<Data::Pond>
+
+=item L<Acme::PSON>
+
+=back
 
 =cut
 
