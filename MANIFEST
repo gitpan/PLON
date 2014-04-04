@@ -15,5 +15,7 @@ t/05_special_chars.t
 t/06_docs.t
 t/07_function.t
 t/08_code.t
+t/09_canonical.t
+t/11_glob.t
 META.yml
 MANIFEST

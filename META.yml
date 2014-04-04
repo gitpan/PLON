@@ -10,7 +10,7 @@ configure_requires:
   CPAN::Meta::Prereqs: '0'
   Module::Build: '0.38'
 dynamic_config: 0
-generated_by: 'Minilla/v0.13.0, CPAN::Meta::Converter version 2.133380'
+generated_by: 'Minilla/v0.13.0, CPAN::Meta::Converter version 2.140640'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -29,7 +29,7 @@ no_index:
 provides:
   PLON:
     file: lib/PLON.pm
-    version: '0.06'
+    version: '0.07'
 requires:
   Encode: '0'
   Scalar::Util: '0'
@@ -39,4 +39,4 @@ resources:
   bugtracker: https://github.com/tokuhirom/PLON/issues
   homepage: https://github.com/tokuhirom/PLON
   repository: git://github.com/tokuhirom/PLON.git
-version: '0.06'
+version: '0.07'

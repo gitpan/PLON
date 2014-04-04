@@ -1,13 +1,14 @@
 package PLON;
 use 5.008005;
 use strict;
-use warnings;
-use Scalar::Util qw(blessed);
+use warnings FATAL => 'all';
+use Scalar::Util qw(blessed reftype);
 use parent qw(Exporter);
 use B;
 use Encode ();
+use Carp ();
 
-our $VERSION = "0.06";
+our $VERSION = "0.07";
 
 our @EXPORT = qw(encode_pson decode_pson);
 
@@ -42,7 +43,7 @@ sub new {
     }, $class;
 }
 
-mk_accessor(__PACKAGE__, $_) for qw(pretty ascii deparse);
+mk_accessor(__PACKAGE__, $_) for qw(pretty ascii deparse canonical);
 
 sub encode {
     my ($self, $stuff) = @_;
@@ -54,50 +55,24 @@ sub _encode {
     my ($self, $value) = @_;
     local $INDENT = $INDENT + 1;
 
+    my $blessed = blessed($value);
+
+    if (defined $blessed) {
+        'bless(' . $self->_encode_basic($value, 1) . ',' . $self->_encode_basic($blessed) . ')';
+    } else {
+        $self->_encode_basic($value);
+    }
+}
+
+sub _encode_basic {
+    my ($self, $value, $blessing) = @_;
+
     if (not defined $value) {
-        'undef';
-    } elsif (blessed $value) {
-        die "PLON.pm doesn't support blessed reference(yet?)";
-    } elsif (ref($value) eq 'ARRAY') {
-        join('',
-            '[',
-            $self->_nl,
-            (map { $self->_indent(1) . $self->_encode($_) . "," . $self->_nl }
-                @$value),
-            $self->_indent,
-            ']',
-        );
-    } elsif (ref($value) eq 'CODE') {
-        if ($self->get_deparse) {
-            require B::Deparse;
-            my $code = B::Deparse->new($self->get_pretty ? '' : '-si0')->coderef2text($value);
-            $code = "sub ${code}";
-            if ($self->get_pretty) {
-                my $indent = $self->_indent;
-                $code =~ s/^/$indent/gm;
-                $code;
-            } else {
-                $code =~ s/\n//g;
-                $code;
-            }
-        } else {
-            'sub { "DUMMY" }'
-        }
-    } elsif (ref($value) eq 'HASH') {
-        join('',
-            '{',
-            $self->_nl,
-            (map {
-                    $self->_indent(1) . $self->_encode($_)
-                      . $self->_before_sp . '=>' . $self->_after_sp
-                      . $self->_encode($value->{$_})
-                      . "," . $self->_nl,
-                  }
-                  keys %$value),
-            $self->_indent,
-            '}',
-        );
-    } elsif (!ref($value)) {
+        return 'undef';
+    }
+
+    my $reftype = reftype($value);
+    if (not defined $reftype) {
         my $flags = B::svref_2object(\$value)->FLAGS;
         return 0 + $value if $flags & (B::SVp_IOK | B::SVp_NOK) && $value * 0 == 0;
 
@@ -162,8 +137,61 @@ sub _encode {
             $value = Encode::is_utf8($value) ? Encode::encode_utf8($value) : $value;
             q{"} . $value . q{"};
         }
+    } elsif ($reftype eq 'SCALAR') {
+        if ($blessing) {
+            '\\(do {my $o=' . $self->_encode($$value) . '})';
+        } else {
+            '\\(' . $self->_encode($$value) . ')';
+        }
+    } elsif ($reftype eq 'REF') {
+        '\\(' . $self->_encode($$value) . ')';
+    } elsif ($reftype eq 'ARRAY') {
+        join('',
+            '[',
+            $self->_nl,
+            (map { $self->_indent(1) . $self->_encode($_) . "," . $self->_nl }
+                @$value),
+            $self->_indent,
+            ']',
+        );
+    } elsif ($reftype eq 'CODE') {
+        if ($self->get_deparse) {
+            require B::Deparse;
+            my $code = B::Deparse->new($self->get_pretty ? '' : '-si0')->coderef2text($value);
+            $code = "sub ${code}";
+            if ($self->get_pretty) {
+                my $indent = $self->_indent;
+                $code =~ s/^/$indent/gm;
+                $code;
+            } else {
+                $code =~ s/\n//g;
+                $code;
+            }
+        } else {
+            'sub { "DUMMY" }'
+        }
+    } elsif ($reftype eq 'HASH') {
+        my @keys = keys %$value;
+        if ($self->get_canonical) {
+            @keys = sort { $a cmp $b } @keys;
+        }
+
+        join('',
+            '{',
+            $self->_nl,
+            (map {
+                    $self->_indent(1) . $self->_encode($_)
+                      . $self->_before_sp . '=>' . $self->_after_sp
+                      . $self->_encode($value->{$_})
+                      . "," . $self->_nl,
+                  } @keys),
+            $self->_indent,
+            '}',
+        );
+    } elsif ($reftype eq 'GLOB') {
+        "\\(" . $$value . ")";
     } else {
-        die "Unknown type";
+        die "Unknown type: ${reftype}";
     }
 }
 
@@ -205,10 +233,23 @@ sub _decode {
         return $self->_decode_string();
     } elsif (/\G${WS}undef/gc) {
         return undef;
+    } elsif (/\G${WS}\\\(/gc) {
+        return $self->_decode_scalarref();
     } elsif (/\G${WS}sub\s*\{/gc) {
         return $self->_decode_code();
+    } elsif (/\G$WS"/gc) {
+        return $self->_decode_string;
+    } elsif (/\G$WS([0-9\.]+)/gc) {
+        return 0+$1;
+    } elsif (/\G${WS}bless\(/gc) {
+        return $self->_decode_object;
+    } elsif (/\G${WS}do \{my \$o=/gc) {
+        return $self->_decode_do;
+    } elsif (/\G$WS\*([a-zA-Z0-9_:]+)/gc) {
+        no strict 'refs';
+        *{$1};
     } else {
-        die "Unexpected token: " . substr($_, 0, 2);
+        Carp::confess("Unexpected token: " . substr($_, pos, 9));
     }
 }
 
@@ -217,10 +258,10 @@ sub _decode_hash {
 
     my %ret;
     until (/\G$WS(,$WS)?\}/gc) {
-        my $k = $self->_decode_term();
+        my $k = $self->_decode();
         /\G$WS=>$WS/gc
             or _exception("Unexpected token in Hash");
-        my $v = $self->_decode_term();
+        my $v = $self->_decode();
 
         $ret{$k} = $v;
 
@@ -235,32 +276,44 @@ sub _decode_array {
 
     my @ret;
     until (/\G$WS,?$WS\]/gc) {
-        my $term = $self->_decode_term();
+        my $term = $self->_decode();
         push @ret, $term;
     }
     return \@ret;
-}
-
-sub _decode_term {
-    my ($self) = @_;
-
-    if (/\G$WS"/gc) {
-        return $self->_decode_string;
-    } elsif (/\G$WS([0-9\.]+)/gc) {
-        0+$1;
-    } elsif (/\G${WS}undef/gc) {
-        return undef;
-    } elsif (/\G${WS}sub\s*\{/gc) {
-        return $self->_decode_code();
-    } else {
-        _exception("Not a term");
-    }
 }
 
 sub _decode_code {
     # We can't decode coderef. Because it makes security issue.
     # And, we can't detect end of code block.
     Carp::confess("Cannot decode PLON contains CodeRef.");
+}
+
+sub _decode_object {
+    my ($self) = @_;
+    my $body  = $self->_decode; # class name
+    m!\G${WS},\s*!gc
+        or _exception("Missing comma after bless");
+    my $str = $self->_decode; # class name
+    m!\G${WS}\)!gc
+        or _exception("Missing closing paren after bless");
+    return bless($body, $str);
+}
+
+sub _decode_scalarref {
+    my $self = shift;
+    my $value = $self->_decode();
+    /\G\s*\)/gc
+        or _exception("Missing closing paren after scalarref");
+    return \$value;
+}
+
+# do {my $o=3}
+sub _decode_do {
+    my $self = shift;
+    my $value = $self->_decode;
+    m!\G\}!gc
+        or _exception("Missing closing blace after `do {`");
+    return $value;
 }
 
 sub _decode_string {
@@ -399,6 +452,14 @@ required by the PLON syntax or other flags. This results in a faster and more co
 
 If $enable is true (or missing), then the encode method will de-parse the code by L<B::Deparse>.
 Otherwise, encoder generates C<sub { "DUMMY" }> like L<Data::Dumper>.
+
+=item C<< $pson->canonical([$enabled]) >>
+
+=item C<< my $enabled = $pson->get_canonical() >>
+
+If $enable is true (or missing), then the "encode" method will output
+PLON objects by sorting their keys. This is adding a comparatively
+high overhead.
 
 =back
 
