@@ -5,6 +5,7 @@ META.json
 README.md
 cpanfile
 lib/PLON.pm
+lib/Scalar/Perl.pm
 minil.toml
 t/00_compile.t
 t/01_simple.t
@@ -17,5 +18,6 @@ t/07_function.t
 t/08_code.t
 t/09_canonical.t
 t/11_glob.t
+t/12_perl.t
 META.yml
 MANIFEST

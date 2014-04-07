@@ -2,10 +2,9 @@ use strict;
 use warnings;
 use utf8;
 use Test::More;
-use PLON;
+use Scalar::Perl;
 
-is encode_plon([]), '[]';
-is_deeply decode_pson('[]'), [];
+is([1,2,3]->$_perl, '[1,2,3,]');
 
 done_testing;
 

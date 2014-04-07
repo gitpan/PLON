@@ -59,7 +59,10 @@
    "provides" : {
       "PLON" : {
          "file" : "lib/PLON.pm",
-         "version" : "0.07"
+         "version" : "0.08"
+      },
+      "Scalar::Perl" : {
+         "file" : "lib/Scalar/Perl.pm"
       }
    },
    "release_status" : "stable",
@@ -73,5 +76,5 @@
          "web" : "https://github.com/tokuhirom/PLON"
       }
    },
-   "version" : "0.07"
+   "version" : "0.08"
 }

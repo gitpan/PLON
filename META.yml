@@ -29,7 +29,9 @@ no_index:
 provides:
   PLON:
     file: lib/PLON.pm
-    version: '0.07'
+    version: '0.08'
+  Scalar::Perl:
+    file: lib/Scalar/Perl.pm
 requires:
   Encode: '0'
   Scalar::Util: '0'
@@ -39,4 +41,4 @@ resources:
   bugtracker: https://github.com/tokuhirom/PLON/issues
   homepage: https://github.com/tokuhirom/PLON
   repository: git://github.com/tokuhirom/PLON.git
-version: '0.07'
+version: '0.08'
